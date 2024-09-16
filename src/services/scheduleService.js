@@ -1,4 +1,5 @@
 import db from '../models/index';
+import dayjs from 'dayjs';
 
 const createNewScheduleService = async (data) => {
 
@@ -84,6 +85,7 @@ const getAllScheduleByUserIdService = async (userId, scheduleId, productId, page
                     {
                         model: db.Product,
                         as: 'productScheduleData',
+                        attributes: ['title', 'price'],
                         include: [
                             {
                                 model: db.User,
@@ -109,7 +111,7 @@ const getAllScheduleByUserIdService = async (userId, scheduleId, productId, page
 
             if (selected !== 'ALL') {
                 filteredSchedule = filteredSchedule.filter(schedule => {
-                    if (selected === 'pending' || selected === 'accept' || selected === 'refuse' || selected === 'completed' || selected === 'canceled') {
+                    if (selected === 'pending' || selected === 'accept' || selected === 'refuse' || selected === 'completed' || selected === 'canceled' || selected === 'arrange') {
                         return schedule.status === selected;
                     }
                     return true;
@@ -167,7 +169,7 @@ const getAllScheduleByUserIdService = async (userId, scheduleId, productId, page
                     {
                         model: db.Product,
                         as: 'productScheduleData',
-                        attributes: ['title'],
+                        attributes: ['title', 'price'],
                         include: [
                             {
                                 model: db.User,
@@ -214,19 +216,6 @@ const updateScheduleService = async (data) => {
     try {
         const schedule = await db.Schedule.findOne({
             where: { id: data.id },
-            include: [
-                {
-                    model: db.User,
-                    as: 'userScheduleData',
-                    attributes: ['email', 'name'],
-                },
-                {
-                    model: db.Product,
-                    as: 'productScheduleData',
-                    attributes: ['title'],
-
-                },
-            ],
             raw: false,
             nest: true
         });
@@ -238,7 +227,14 @@ const updateScheduleService = async (data) => {
             };
         }
 
-        schedule.status = data.status;
+        const currentDate = dayjs().format('DD/MM/YYYY');
+        const endDate = dayjs(schedule.endDate).format('DD/MM/YYYY');
+
+        if (endDate === currentDate || schedule.status === 'in-use') {
+            schedule.status = 'completed';
+        } else {
+            schedule.status = data.status;
+        }
 
         await schedule.save();
 
@@ -248,11 +244,10 @@ const updateScheduleService = async (data) => {
         };
 
     } catch (error) {
-        console.error('Error updating user:', error);
+        console.error('Error updating schedule:', error);
         throw new Error('Cập nhật thất bại!');
     }
 };
-
 
 module.exports = {
     createNewScheduleService,

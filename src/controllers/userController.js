@@ -32,9 +32,9 @@ const handleGetMe = async (req, res) => {
         return res.status(200).json(response);
     } catch (e) {
         console.log(e);
-        return res.status(500).json({
-            status: 500,
-            message: 'Error from server'
+        return res.status(200).json({
+            status: 200,
+            message: 'Not Found'
         })
     }
 }

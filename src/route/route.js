@@ -1,4 +1,5 @@
 import express from 'express';
+import homeController from '../controllers/homeController';
 import userController from '../controllers/userController';
 import categoryController from '../controllers/categoryController';
 import utilitiesController from '../controllers/utilitiesController';
@@ -8,6 +9,9 @@ import scheduleController from '../controllers/scheduleController';
 const router = express.Router();
 
 const initRoutes = (app) => {
+
+    router.get('/', homeController.handleGetHome);
+
     //user 
     router.post('/api/log-in-user', userController.handleLoginUser);
     router.get('/api/get-me', userController.handleGetMe);
