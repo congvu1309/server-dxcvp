@@ -5,6 +5,7 @@ import categoryController from '../controllers/categoryController';
 import utilitiesController from '../controllers/utilitiesController';
 import productController from '../controllers/productController';
 import scheduleController from '../controllers/scheduleController';
+import evaluationController from '../controllers/evaluationController';
 
 const router = express.Router();
 
@@ -47,6 +48,10 @@ const initRoutes = (app) => {
     router.get('/api/get-all-schedule-by-userId', scheduleController.handleGetAllScheduleByUserId);
     router.post('/api/update-schedule', scheduleController.handleUpdateSchedule);
 
+    //evaluation
+    router.post('/api/create-new-evaluation', evaluationController.handleCreateNewEvaluation);
+    router.get('/api/get-evaluation', evaluationController.handleGetEvaluation);
+    router.post('/api/update-evaluation', evaluationController.handleUpdateEvaluation);
 
     return app.use('/', router);
 }

@@ -1,5 +1,6 @@
 import db from '../models/index';
-import dayjs from 'dayjs';
+import { format, parse } from 'date-fns';
+import emailService from './emailService';
 
 const createNewScheduleService = async (data) => {
 
@@ -52,7 +53,7 @@ const getAllScheduleByUserIdService = async (userId, scheduleId, productId, page
                     {
                         model: db.Product,
                         as: 'productScheduleData',
-                        attributes: ['title', 'provinces', 'districts'],
+                        attributes: ['title', 'price', 'provinces', 'districts'],
                     }
                 ],
                 raw: false,
@@ -67,7 +68,10 @@ const getAllScheduleByUserIdService = async (userId, scheduleId, productId, page
 
         if (productId) {
             allSchedule = await db.Schedule.findAll({
-                where: { productId: productId, status: 'accept' },
+                where: {
+                    productId: productId,
+                    status: ['accept', 'in-use']
+                },
                 attributes: ['productId', 'status', 'startDate', 'endDate'],
                 raw: false,
                 nest: true
@@ -78,6 +82,16 @@ const getAllScheduleByUserIdService = async (userId, scheduleId, productId, page
                 data: allSchedule
             };
         }
+
+        const STATUS_PRIORITY = {
+            'canceled': 1,
+            'pending': 2,
+            'accept': 3,
+            'in-use': 4,
+            'completed': 5,
+            'refunded': 6,
+            'refuse': 7
+        };
 
         if (pageNumber || search || selected) {
             allSchedule = await db.Schedule.findAll({
@@ -119,19 +133,9 @@ const getAllScheduleByUserIdService = async (userId, scheduleId, productId, page
             }
 
             const sortedSchedules = filteredSchedule.sort((a, b) => {
-                if (a.status === 'pending' && b.status !== 'pending') {
-                    return -1;
-                }
-                if (a.status !== 'pending' && b.status === 'pending') {
-                    return 1;
-                }
-                if (a.status === 'accept' && b.status !== 'accept') {
-                    return -1;
-                }
-                if (a.status !== 'accept' && b.status === 'accept') {
-                    return 1;
-                }
-                return 0;
+                const priorityA = STATUS_PRIORITY[a.status] || Number.MAX_SAFE_INTEGER;
+                const priorityB = STATUS_PRIORITY[b.status] || Number.MAX_SAFE_INTEGER;
+                return priorityA - priorityB;
             });
 
             const offset = (pageNumber - 1) * pageSize;
@@ -185,19 +189,9 @@ const getAllScheduleByUserIdService = async (userId, scheduleId, productId, page
         }
 
         const sortedSchedules = allSchedule.sort((a, b) => {
-            if (a.status === 'pending' && b.status !== 'pending') {
-                return -1;
-            }
-            if (a.status !== 'pending' && b.status === 'pending') {
-                return 1;
-            }
-            if (a.status === 'accept' && b.status !== 'accept') {
-                return -1;
-            }
-            if (a.status !== 'accept' && b.status === 'accept') {
-                return 1;
-            }
-            return 0;
+            const priorityA = STATUS_PRIORITY[a.status] || Number.MAX_SAFE_INTEGER;
+            const priorityB = STATUS_PRIORITY[b.status] || Number.MAX_SAFE_INTEGER;
+            return priorityA - priorityB;
         });
 
         return {
@@ -211,11 +205,29 @@ const getAllScheduleByUserIdService = async (userId, scheduleId, productId, page
     }
 };
 
-
 const updateScheduleService = async (data) => {
     try {
         const schedule = await db.Schedule.findOne({
             where: { id: data.id },
+            include: [
+                {
+                    model: db.User,
+                    as: 'userScheduleData',
+                    attributes: ['email', 'name'],
+                },
+                {
+                    model: db.Product,
+                    as: 'productScheduleData',
+                    attributes: ['title', 'price', 'checkIn', 'checkOut', 'provinces', 'districts'],
+                    include: [
+                        {
+                            model: db.User,
+                            as: 'userProductData',
+                            attributes: ['name'],
+                        }
+                    ],
+                },
+            ],
             raw: false,
             nest: true
         });
@@ -227,10 +239,52 @@ const updateScheduleService = async (data) => {
             };
         }
 
-        const currentDate = dayjs().format('DD/MM/YYYY');
-        const endDate = dayjs(schedule.endDate).format('DD/MM/YYYY');
+        const currentDate = format(new Date(), 'dd/MM/yyyy');
+        const startDate = format(parse(schedule.startDate, 'dd/MM/yyyy', new Date()), 'dd/MM/yyyy');
+        const endDate = format(parse(schedule.endDate, 'dd/MM/yyyy', new Date()), 'dd/MM/yyyy');
 
-        if (endDate === currentDate || schedule.status === 'in-use') {
+        const today = new Date();
+        const start = parse(startDate, 'dd/MM/yyyy', new Date());
+
+        // Check if status changes to 'accept' and send email
+        if (data.status === 'accept' && schedule.status !== 'accept') {
+            await emailService.sendSimpleEmail({
+                reciverEmail: schedule.userScheduleData.email,
+                name: schedule.userScheduleData.name,
+                hoast: schedule.productScheduleData.userProductData.name,
+                startDate: schedule.startDate,
+                endDate: schedule.endDate,
+                title: schedule.productScheduleData.title,
+                checkIn: schedule.productScheduleData.checkIn,
+                checkOut: schedule.productScheduleData.checkOut,
+                provinces: schedule.productScheduleData.provinces,
+                districts: schedule.productScheduleData.districts,
+                content: `Chúc mừng! Lịch trình của bạn đã được chấp nhận. Vui lòng xem thông tin chi tiết bên dưới`,
+                redirectLink: 'https://www.youtube.com/watch?v=UTv7l6czu5s'
+            });
+        }
+
+        // Check if status changes to 'refuse' and send email with different content
+        if (data.status === 'refuse' && schedule.status !== 'refuse') {
+            await emailService.sendSimpleEmail({
+                reciverEmail: schedule.userScheduleData.email,
+                name: schedule.userScheduleData.name,
+                hoast: schedule.productScheduleData.userProductData.name,
+                startDate: schedule.startDate,
+                endDate: schedule.endDate,
+                title: schedule.productScheduleData.title,
+                checkIn: schedule.productScheduleData.checkIn,
+                checkOut: schedule.productScheduleData.checkOut,
+                provinces: schedule.productScheduleData.provinces,
+                districts: schedule.productScheduleData.districts,
+                content: `Xin lỗi! Lịch trình của bạn đã bị từ chối. Vui lòng liên hệ chúng tôi để biết thêm chi tiết`,
+                redirectLink: 'https://www.youtube.com/watch?v=UTv7l6czu5s'
+            });
+        }
+
+        if (start < today) {
+            schedule.status = 'refuse';
+        } else if (endDate === currentDate || schedule.status === 'in-use') {
             schedule.status = 'completed';
         } else {
             schedule.status = data.status;
