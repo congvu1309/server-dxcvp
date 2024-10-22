@@ -122,6 +122,7 @@ const loginUserService = async (data, res) => {
 };
 
 const getMeService = async (cookie) => {
+
     try {
         const claims = jwt.verify(cookie, 'secret');
         if (!claims) {

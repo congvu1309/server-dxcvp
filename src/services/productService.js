@@ -66,7 +66,6 @@ const createNewProductService = async (data) => {
 };
 
 const getAllProductService = async (userId, categoryId, address, pageNumber) => {
-
     const pageSize = 20;
 
     try {
